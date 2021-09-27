@@ -105,7 +105,7 @@ def cli_main():
         result = trainer.test(model, datamodule=dm)
         pprint(result)
     elif args.validate:
-        result = trainer.validate(model, datamodule=dm)
+        result = trainer.validate(model, datamodule=dm, verbose=True)
         pprint(result)
     else:
         trainer.fit(model, datamodule=dm)

@@ -29,6 +29,9 @@ def preprocess_item(item):
     adj = torch.zeros([N, N], dtype=torch.bool)
     adj[edge_index[0, :], edge_index[1, :]] = True
 
+    # TODO if no edge features exist, set all to 1 (for Cora, maybe better solution exists)
+    if edge_attr is None:
+        edge_attr = torch.ones(edge_index.shape[1], dtype=torch.int64)
     # edge feature here
     if len(edge_attr.size()) == 1:
         edge_attr = edge_attr[:, None]
@@ -94,6 +97,22 @@ class MyZINCDataset(torch_geometric.datasets.ZINC):
 
     def process(self):
         super(MyZINCDataset, self).process()
+
+    def __getitem__(self, idx):
+        if isinstance(idx, int):
+            item = self.get(self.indices()[idx])
+            item.idx = idx
+            return preprocess_item(item)
+        else:
+            return self.index_select(idx)
+
+class MyCoraDataset(torch_geometric.datasets.Planetoid):
+
+    def download(self):
+        super(MyCoraDataset, self).download()
+
+    def process(self):
+        super(MyCoraDataset, self).process()
 
     def __getitem__(self, idx):
         if isinstance(idx, int):

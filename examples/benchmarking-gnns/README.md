@@ -50,6 +50,10 @@ CUDA_VISIBLE_DEVICES=0 \
       --check_val_every_n_epoch 10 --warmup_updates $warmup_updates --tot_updates $tot_updates \
       --default_root_dir $save_path
 ```
+ON CPU:
+- set "gpus" to 0
+- delete "--precision 16" to disable native AMP support
+
 
 ## Citation
 Please kindly cite this paper if you use the code:

@@ -59,6 +59,20 @@ class Graphormer(pl.LightningModule):
                 64, hidden_dim, padding_idx=0)
             self.out_degree_encoder = nn.Embedding(
                 64, hidden_dim, padding_idx=0)
+        elif dataset_name == 'CORA':
+            self.atom_encoder = nn.Linear(
+                1433, hidden_dim)
+            self.edge_encoder = nn.Embedding(
+                512 * 3 + 1, num_heads, padding_idx=0)
+            self.edge_type = edge_type
+            if self.edge_type == 'multi_hop':
+                self.edge_dis_encoder = nn.Embedding(
+                    128 * num_heads * num_heads, 1)
+            self.spatial_pos_encoder = nn.Embedding(512, num_heads, padding_idx=0)
+            self.in_degree_encoder = nn.Embedding(
+                512, hidden_dim, padding_idx=0)
+            self.out_degree_encoder = nn.Embedding(
+                512, hidden_dim, padding_idx=0)
         else:
             self.atom_encoder = nn.Embedding(
                 512 * 9 + 1, hidden_dim, padding_idx=0)
@@ -92,6 +106,11 @@ class Graphormer(pl.LightningModule):
         self.evaluator = get_dataset(dataset_name)['evaluator']
         self.metric = get_dataset(dataset_name)['metric']
         self.loss_fn = get_dataset(dataset_name)['loss_fn']
+        if dataset_name == 'CORA':
+            self.train_mask = get_dataset(dataset_name)['train_mask']
+            self.val_mask = get_dataset(dataset_name)['val_mask']
+            self.test_mask = get_dataset(dataset_name)['test_mask']
+
         self.dataset_name = dataset_name
 
         self.warmup_updates = warmup_updates
@@ -182,6 +201,8 @@ class Graphormer(pl.LightningModule):
         if self.dataset_name == 'PCQM4M-LSC':
             # get whole graph rep
             output = self.out_proj(output[:, 0, :])
+        elif self.dataset_name == 'CORA': #node classification
+            output = self.downstream_out_proj(output)[:,1:]
         else:
             output = self.downstream_out_proj(output[:, 0, :])
         return output
@@ -225,8 +246,13 @@ class Graphormer(pl.LightningModule):
                 loss, _ = flag_bounded(model_forward, perturb_shape, y_gt, optimizer, batched_data.x.device, self.loss_fn,
                                        m=self.flag_m, step_size=self.flag_step_size, mag=self.flag_mag)
                 self.lr_schedulers().step()
+
+        elif self.dataset_name == 'CORA':
+            y_hat = self(batched_data).view(-1)  # call forward
+            y_gt = batched_data.y.view(-1)
+            loss = self.loss_fn(y_hat[self.train_mask], y_gt[self.train_mask])
         else:
-            y_hat = self(batched_data).view(-1)
+            y_hat = self(batched_data).view(-1) #call forward
             y_gt = batched_data.y.view(-1)
             loss = self.loss_fn(y_hat, y_gt)
         self.log('train_loss', loss, sync_dist=True)
@@ -236,6 +262,9 @@ class Graphormer(pl.LightningModule):
         if self.dataset_name in ['PCQM4M-LSC', 'ZINC']:
             y_pred = self(batched_data).view(-1)
             y_true = batched_data.y.view(-1)
+        elif self.dataset_name == 'CORA':
+            y_pred = torch.argmax(self(batched_data), dim=2).squeeze()
+            y_true = batched_data.y
         else:
             y_pred = self(batched_data)
             y_true = batched_data.y
@@ -251,6 +280,13 @@ class Graphormer(pl.LightningModule):
             mask = ~torch.isnan(y_true)
             loss = self.loss_fn(y_pred[mask], y_true[mask])
             self.log('valid_ap', loss, sync_dist=True)
+        elif self.dataset_name == 'CORA':
+            input_dict = {"y_true": y_true[self.val_mask], "y_pred": y_pred[self.val_mask]}
+            try:
+                self.log('valid_' + self.metric, self.evaluator.eval(input_dict)
+                [self.metric], sync_dist=True)
+            except:
+                pass
         else:
             input_dict = {"y_true": y_true, "y_pred": y_pred}
             try:
@@ -281,6 +317,9 @@ class Graphormer(pl.LightningModule):
             torch.save(result, 'y_pred.pt')
             torch.save(idx, 'idx.pt')
             exit(0)
+        elif self.dataset_name == 'CORA':
+            y_true = y_true[self.test_mask]
+            y_pred = y_pred[self.test_mask]
         input_dict = {"y_true": y_true, "y_pred": y_pred}
         self.log('test_' + self.metric, self.evaluator.eval(input_dict)
                  [self.metric], sync_dist=True)

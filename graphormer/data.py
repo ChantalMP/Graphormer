@@ -2,12 +2,15 @@
 # Licensed under the MIT License.
 
 from collator import collator
-from wrapper import MyGraphPropPredDataset, MyPygPCQM4MDataset, MyZINCDataset
+from wrapper import MyGraphPropPredDataset, MyPygPCQM4MDataset, MyZINCDataset, MyCoraDataset
 
 from pytorch_lightning import LightningDataModule
 import torch
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
+from torch_geometric.transforms import NormalizeFeatures
+from torch_geometric.datasets import Planetoid
+
 import ogb
 import ogb.lsc
 import ogb.graphproppred
@@ -15,7 +18,6 @@ from functools import partial
 
 
 dataset = None
-
 
 def get_dataset(dataset_name='abaaba'):
     global dataset
@@ -65,6 +67,21 @@ def get_dataset(dataset_name='abaaba'):
             'test_dataset': MyZINCDataset(subset=True, root='../../dataset/pyg_zinc', split='test'),
             'max_node': 128,
         }
+    elif dataset_name == 'CORA':
+        dataset = {
+            'num_class': 7,
+            'loss_fn': F.cross_entropy,
+            'metric': 'acc',
+            'metric_mode': 'max',
+            'evaluator': ogb.lsc.MAG240MEvaluator(),  # accuracy metric for node classification
+            'train_dataset': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()),
+            'valid_dataset': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()),
+            'test_dataset': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()),
+            'train_mask': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()).data.train_mask,
+            'val_mask': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()).data.val_mask,
+            'test_mask': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()).data.test_mask,
+            'max_node': 2708,
+        }
     else:
         raise NotImplementedError
 
@@ -101,6 +118,10 @@ class GraphDataModule(LightningDataModule):
 
     def setup(self, stage: str = None):
         if self.dataset_name == 'ZINC':
+            self.dataset_train = self.dataset['train_dataset']
+            self.dataset_val = self.dataset['valid_dataset']
+            self.dataset_test = self.dataset['test_dataset']
+        elif self.dataset_name == 'CORA':
             self.dataset_train = self.dataset['train_dataset']
             self.dataset_val = self.dataset['valid_dataset']
             self.dataset_test = self.dataset['test_dataset']
