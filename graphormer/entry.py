@@ -77,6 +77,7 @@ def cli_main():
             flag_m=args.flag_m,
             flag_step_size=args.flag_step_size,
         )
+
     if not args.test and not args.validate:
         print(model)
     print('total params:', sum(p.numel() for p in model.parameters()))

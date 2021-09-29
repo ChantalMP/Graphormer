@@ -20,24 +20,20 @@ def convert_to_single_emb(x, offset=512):
     return x
 
 
-def preprocess_item(item):
+def preprocess_item(item, offset=512):
     edge_attr, edge_index, x = item.edge_attr, item.edge_index, item.x
     N = x.size(0)
-    x = convert_to_single_emb(x)
+    x = convert_to_single_emb(x, offset)
 
     # node adj matrix [N, N] bool
     adj = torch.zeros([N, N], dtype=torch.bool)
     adj[edge_index[0, :], edge_index[1, :]] = True
 
-    # TODO if no edge features exist, set all to 1 (for Cora, maybe better solution exists)
-    if edge_attr is None:
-        edge_attr = torch.ones(edge_index.shape[1], dtype=torch.int64)
     # edge feature here
     if len(edge_attr.size()) == 1:
         edge_attr = edge_attr[:, None]
     attn_edge_type = torch.zeros([N, N, edge_attr.size(-1)], dtype=torch.long)
-    attn_edge_type[edge_index[0, :], edge_index[1, :]
-                   ] = convert_to_single_emb(edge_attr) + 1
+    attn_edge_type[edge_index[0, :], edge_index[1, :]] = convert_to_single_emb(edge_attr) + 1
 
     shortest_path_result, path = algos.floyd_warshall(adj.numpy())
     max_dist = np.amax(shortest_path_result)
@@ -55,6 +51,32 @@ def preprocess_item(item):
     item.in_degree = adj.long().sum(dim=1).view(-1)
     item.out_degree = adj.long().sum(dim=0).view(-1)
     item.edge_input = torch.from_numpy(edge_input).long()
+
+    return item
+
+def preprocess_item_no_edge_feat(item, offset=512):
+
+    edge_index, x = item.edge_index, item.x
+    N = x.size(0)
+    x = convert_to_single_emb(x, offset)
+
+    # node adj matrix [N, N] bool
+    adj = torch.zeros([N, N], dtype=torch.bool)
+    adj[edge_index[0, :], edge_index[1, :]] = True
+
+
+    shortest_path_result, path = algos.floyd_warshall(adj.numpy())
+    spatial_pos = torch.from_numpy((shortest_path_result)).long()
+    attn_bias = torch.zeros(
+        [N + 1, N + 1], dtype=torch.float)  # with graph token
+
+    # combine
+    item.x = x
+    item.adj = adj
+    item.attn_bias = attn_bias
+    item.spatial_pos = spatial_pos
+    item.in_degree = adj.long().sum(dim=1).view(-1)
+    item.out_degree = adj.long().sum(dim=0).view(-1)
 
     return item
 
@@ -118,6 +140,6 @@ class MyCoraDataset(torch_geometric.datasets.Planetoid):
         if isinstance(idx, int):
             item = self.get(self.indices()[idx])
             item.idx = idx
-            return preprocess_item(item)
+            return preprocess_item_no_edge_feat(item, offset=2)
         else:
             return self.index_select(idx)

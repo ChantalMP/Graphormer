@@ -78,9 +78,11 @@ class Batch():
         self.in_degree, self.out_degree = self.in_degree.to(
             device), self.out_degree.to(device)
         self.x, self.y = self.x.to(device), self.y.to(device)
-        self.attn_bias, self.attn_edge_type, self.spatial_pos = self.attn_bias.to(
-            device), self.attn_edge_type.to(device), self.spatial_pos.to(device)
-        self.edge_input = self.edge_input.to(device)
+        self.attn_bias, self.spatial_pos = self.attn_bias.to(
+            device), self.spatial_pos.to(device)
+        if self.attn_edge_type is not None and self.edge_input is not None:
+            self.attn_edge_type = self.attn_edge_type.to(device)
+            self.edge_input = self.edge_input.to(device)
         return self
 
     def __len__(self):
@@ -122,5 +124,38 @@ def collator(items, max_node=512, multi_hop_max_dist=20, spatial_pos_max=20):
         out_degree=out_degree,
         x=x,
         edge_input=edge_input,
+        y=y,
+    )
+
+def collator_no_edge_feat(items, max_node=512, multi_hop_max_dist=20, spatial_pos_max=20):
+    items = [
+        item for item in items if item is not None and item.x.size(0) <= max_node]
+    items = [(item.idx, item.attn_bias, item.spatial_pos, item.in_degree,
+              item.out_degree, item.x, item.y) for item in items]
+    idxs, attn_biases, spatial_poses, in_degrees, out_degrees, xs, ys = zip(
+        *items)
+
+    for idx, _ in enumerate(attn_biases):
+        attn_biases[idx][1:, 1:][spatial_poses[idx] >= spatial_pos_max] = float('-inf')
+    max_node_num = max(i.size(0) for i in xs)
+    y = torch.cat(ys)
+    x = torch.cat([pad_2d_unsqueeze(i, max_node_num) for i in xs])
+    attn_bias = torch.cat([pad_attn_bias_unsqueeze(
+        i, max_node_num + 1) for i in attn_biases])
+    spatial_pos = torch.cat([pad_spatial_pos_unsqueeze(i, max_node_num)
+                        for i in spatial_poses])
+    in_degree = torch.cat([pad_1d_unsqueeze(i, max_node_num)
+                          for i in in_degrees])
+    out_degree = torch.cat([pad_1d_unsqueeze(i, max_node_num)
+                           for i in out_degrees])
+    return Batch(
+        idx=torch.LongTensor(idxs),
+        attn_bias=attn_bias,
+        attn_edge_type=None,
+        spatial_pos=spatial_pos,
+        in_degree=in_degree,
+        out_degree=out_degree,
+        x=x,
+        edge_input=None,
         y=y,
     )

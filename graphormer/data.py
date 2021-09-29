@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from graphormer.collator import collator
+from graphormer.collator import collator, collator_no_edge_feat
 from torch_geometric.data import RandomNodeSampler
 from graphormer.wrapper import MyGraphPropPredDataset, MyPygPCQM4MDataset, MyZINCDataset, MyCoraDataset
 
@@ -26,8 +26,7 @@ class TruncateData(object):
         item.train_mask[:] = False
         item.val_mask[:] = False
         item.test_mask[:] = False
-        #item.train_mask[:item.num_nodes // 2] = True
-        item.train_mask[0:2] = True
+        item.train_mask[:item.num_nodes // 2] = True
         item.val_mask[item.num_nodes // 2:item.num_nodes // 2 + item.num_nodes // 4] = True
         item.test_mask[item.num_nodes // 2 + item.num_nodes // 4:] = True
         return item
@@ -86,7 +85,7 @@ def get_dataset(dataset_name='abaaba'):
             'max_node': 128,
         }
     elif dataset_name == 'CORA':
-        ds = MyCoraDataset(root='data/Planetoid_2node', name='Cora', transform=NormalizeFeatures(), pre_transform=TruncateData())
+        ds = MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures())
         dataset = {
             'num_class': 7,
             'loss_fn': F.cross_entropy,
@@ -140,15 +139,18 @@ class GraphDataModule(LightningDataModule):
             self.dataset_train = self.dataset['train_dataset']
             self.dataset_val = self.dataset['valid_dataset']
             self.dataset_test = self.dataset['test_dataset']
+            self.collator = collator
         elif self.dataset_name == 'CORA':
             self.dataset_train = self.dataset['train_dataset']
             self.dataset_val = self.dataset['valid_dataset']
             self.dataset_test = self.dataset['test_dataset']
+            self.collator = collator_no_edge_feat
         else:
             split_idx = self.dataset['dataset'].get_idx_split()
             self.dataset_train = self.dataset['dataset'][split_idx["train"]]
             self.dataset_val = self.dataset['dataset'][split_idx["valid"]]
             self.dataset_test = self.dataset['dataset'][split_idx["test"]]
+            self.collator = collator
 
     def train_dataloader(self):
         loader = DataLoader(
@@ -157,7 +159,7 @@ class GraphDataModule(LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
-            collate_fn=partial(collator, max_node=get_dataset(self.dataset_name)[
+            collate_fn=partial(self.collator, max_node=get_dataset(self.dataset_name)[
                                'max_node'], multi_hop_max_dist=self.multi_hop_max_dist, spatial_pos_max=self.spatial_pos_max),
         )
         print('len(train_dataloader)', len(loader))
@@ -170,7 +172,7 @@ class GraphDataModule(LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=False,
-            collate_fn=partial(collator, max_node=get_dataset(self.dataset_name)[
+            collate_fn=partial(self.collator, max_node=get_dataset(self.dataset_name)[
                                'max_node'], multi_hop_max_dist=self.multi_hop_max_dist, spatial_pos_max=self.spatial_pos_max),
         )
         print('len(val_dataloader)', len(loader))
@@ -183,7 +185,7 @@ class GraphDataModule(LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=False,
-            collate_fn=partial(collator, max_node=get_dataset(self.dataset_name)[
+            collate_fn=partial(self.collator, max_node=get_dataset(self.dataset_name)[
                                'max_node'], multi_hop_max_dist=self.multi_hop_max_dist, spatial_pos_max=self.spatial_pos_max),
         )
         print('len(test_dataloader)', len(loader))

@@ -60,10 +60,8 @@ class Graphormer(pl.LightningModule):
             self.out_degree_encoder = nn.Embedding(
                 64, hidden_dim, padding_idx=0)
         elif dataset_name == 'CORA':
-            self.atom_encoder = nn.Linear(
-                1433, hidden_dim)
-            self.edge_encoder = nn.Embedding(
-                512 * 3 + 1, num_heads, padding_idx=0)
+            self.atom_encoder = nn.Embedding(2869, hidden_dim, padding_idx=0)
+            self.edge_encoder = nn.Embedding(512 * 3 + 1, num_heads, padding_idx=0)
             self.edge_type = edge_type
             if self.edge_type == 'multi_hop':
                 self.edge_dis_encoder = nn.Embedding(
@@ -168,17 +166,20 @@ class Graphormer(pl.LightningModule):
                 max_dist, n_graph, n_node, n_node, self.num_heads).permute(1, 2, 3, 0, 4)
             edge_input = (edge_input.sum(-2) /
                           (spatial_pos_.float().unsqueeze(-1))).permute(0, 3, 1, 2)
+        elif self.edge_type == 'None':
+            pass
         else:
             # [n_graph, n_node, n_node, n_head] -> [n_graph, n_head, n_node, n_node]
             edge_input = self.edge_encoder(
                 attn_edge_type).mean(-2).permute(0, 3, 1, 2)
 
-        graph_attn_bias[:, :, 1:, 1:] = graph_attn_bias[:,
-                                                        :, 1:, 1:] + edge_input
+        if self.edge_type != 'None':
+            graph_attn_bias[:, :, 1:, 1:] = graph_attn_bias[:,
+                                                            :, 1:, 1:] + edge_input
         graph_attn_bias = graph_attn_bias + attn_bias.unsqueeze(1)  # reset
 
         # node feauture + graph token
-        node_feature = self.atom_encoder(x).sum(
+        node_feature = self.atom_encoder(x.long()).sum(
             dim=-2)           # [n_graph, n_node, n_hidden]
         if self.flag and perturb is not None:
             node_feature += perturb
@@ -252,12 +253,12 @@ class Graphormer(pl.LightningModule):
             y_gt = batched_data.y.view(-1)
             loss = self.loss_fn(y_hat[self.train_mask], y_gt[self.train_mask])
             acc = self.evaluator.eval({'y_pred': torch.argmax(y_hat[self.train_mask], dim=1), 'y_true': y_gt[self.train_mask]})[self.metric]
+            self.log('train_' + self.metric, acc, sync_dist=True)
         else:
             y_hat = self(batched_data).view(-1) #call forward
             y_gt = batched_data.y.view(-1)
             loss = self.loss_fn(y_hat, y_gt)
         self.log('train_loss', loss, sync_dist=True)
-        self.log('train_' + self.metric, acc, sync_dist=True)
         return loss
 
     def validation_step(self, batched_data, batch_idx):
