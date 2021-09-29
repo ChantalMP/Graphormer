@@ -50,7 +50,7 @@ def get_dataset(dataset_name='abaaba'):
             'metric': 'ap',
             'metric_mode': 'max',
             'evaluator': ogb.graphproppred.Evaluator('ogbg-molpcba'),
-            'dataset': MyGraphPropPredDataset('ogbg-molpcba', root='../../dataset'),
+            'dataset': MyGraphPropPredDataset('ogbg-molpcba', root='dataset'),
             'max_node': 128,
         }
     elif dataset_name == 'ogbg-molhiv':
@@ -60,7 +60,7 @@ def get_dataset(dataset_name='abaaba'):
             'metric': 'rocauc',
             'metric_mode': 'max',
             'evaluator': ogb.graphproppred.Evaluator('ogbg-molhiv'),
-            'dataset': MyGraphPropPredDataset('ogbg-molhiv', root='../../dataset'),
+            'dataset': MyGraphPropPredDataset('ogbg-molhiv', root='dataset'),
             'max_node': 128,
         }
     elif dataset_name == 'PCQM4M-LSC':
@@ -70,7 +70,7 @@ def get_dataset(dataset_name='abaaba'):
             'metric': 'mae',
             'metric_mode': 'min',
             'evaluator': ogb.lsc.PCQM4MEvaluator(),
-            'dataset': MyPygPCQM4MDataset(root='../../dataset'),
+            'dataset': MyPygPCQM4MDataset(root='dataset'),
             'max_node': 128,
         }
     elif dataset_name == 'ZINC':
@@ -80,9 +80,9 @@ def get_dataset(dataset_name='abaaba'):
             'metric': 'mae',
             'metric_mode': 'min',
             'evaluator': ogb.lsc.PCQM4MEvaluator(),  # same objective function, so reuse it
-            'train_dataset': MyZINCDataset(subset=True, root='../../dataset/pyg_zinc', split='train'),
-            'valid_dataset': MyZINCDataset(subset=True, root='../../dataset/pyg_zinc', split='val'),
-            'test_dataset': MyZINCDataset(subset=True, root='../../dataset/pyg_zinc', split='test'),
+            'train_dataset': MyZINCDataset(subset=True, root='dataset/pyg_zinc', split='train'),
+            'valid_dataset': MyZINCDataset(subset=True, root='dataset/pyg_zinc', split='val'),
+            'test_dataset': MyZINCDataset(subset=True, root='dataset/pyg_zinc', split='test'),
             'max_node': 128,
         }
     elif dataset_name == 'CORA':
