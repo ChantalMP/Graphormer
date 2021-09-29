@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from model import Graphormer
-from data import GraphDataModule, get_dataset
+from graphormer.model import Graphormer
+from graphormer.data import GraphDataModule, get_dataset
 
 from argparse import ArgumentParser
 from pprint import pprint
@@ -94,7 +94,7 @@ def cli_main():
         mode=get_dataset(dm.dataset_name)['metric_mode'],
         save_last=True,
     )
-    if not args.test and not args.validate and os.path.exists(dirpath + '/last.ckpt'):
+    if not args.test and not args.validate and os.path.exists(dirpath + '/last.ckpt') and args.checkpoint_path != '':
         args.resume_from_checkpoint = dirpath + '/last.ckpt'
         print('args.resume_from_checkpoint', args.resume_from_checkpoint)
     trainer = pl.Trainer.from_argparse_args(args)

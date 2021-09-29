@@ -1,14 +1,14 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from data import get_dataset
-from lr import PolynomialDecayLR
+from graphormer.data import get_dataset
+from graphormer.lr import PolynomialDecayLR
 import torch
 import math
 import torch.nn as nn
 import pytorch_lightning as pl
 
-from utils.flag import flag_bounded
+from graphormer.utils.flag import flag_bounded
 
 
 def init_params(module, n_layers):
@@ -248,14 +248,16 @@ class Graphormer(pl.LightningModule):
                 self.lr_schedulers().step()
 
         elif self.dataset_name == 'CORA':
-            y_hat = self(batched_data).view(-1)  # call forward
+            y_hat = self(batched_data)[0]
             y_gt = batched_data.y.view(-1)
             loss = self.loss_fn(y_hat[self.train_mask], y_gt[self.train_mask])
+            acc = self.evaluator.eval({'y_pred': torch.argmax(y_hat[self.train_mask], dim=1), 'y_true': y_gt[self.train_mask]})[self.metric]
         else:
             y_hat = self(batched_data).view(-1) #call forward
             y_gt = batched_data.y.view(-1)
             loss = self.loss_fn(y_hat, y_gt)
         self.log('train_loss', loss, sync_dist=True)
+        self.log('train_' + self.metric, acc, sync_dist=True)
         return loss
 
     def validation_step(self, batched_data, batch_idx):
@@ -299,6 +301,9 @@ class Graphormer(pl.LightningModule):
         if self.dataset_name in ['PCQM4M-LSC', 'ZINC']:
             y_pred = self(batched_data).view(-1)
             y_true = batched_data.y.view(-1)
+        elif self.dataset_name == 'CORA':
+            y_pred = torch.argmax(self(batched_data), dim=2).squeeze()
+            y_true = batched_data.y
         else:
             y_pred = self(batched_data)
             y_true = batched_data.y

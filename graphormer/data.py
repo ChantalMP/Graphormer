@@ -1,8 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from collator import collator
-from wrapper import MyGraphPropPredDataset, MyPygPCQM4MDataset, MyZINCDataset, MyCoraDataset
+from graphormer.collator import collator
+from torch_geometric.data import RandomNodeSampler
+from graphormer.wrapper import MyGraphPropPredDataset, MyPygPCQM4MDataset, MyZINCDataset, MyCoraDataset
 
 from pytorch_lightning import LightningDataModule
 import torch
@@ -16,6 +17,23 @@ import ogb.lsc
 import ogb.graphproppred
 from functools import partial
 
+class TruncateData(object):
+    r"""Row-normalizes node features to sum-up to one."""
+
+    def __call__(self, data):
+        sampler = RandomNodeSampler(data=data, num_parts=100, shuffle=False)
+        item = next(iter(sampler))
+        item.train_mask[:] = False
+        item.val_mask[:] = False
+        item.test_mask[:] = False
+        #item.train_mask[:item.num_nodes // 2] = True
+        item.train_mask[0:2] = True
+        item.val_mask[item.num_nodes // 2:item.num_nodes // 2 + item.num_nodes // 4] = True
+        item.test_mask[item.num_nodes // 2 + item.num_nodes // 4:] = True
+        return item
+
+    def __repr__(self):
+        return '{}()'.format(self.__class__.__name__)
 
 dataset = None
 
@@ -68,18 +86,19 @@ def get_dataset(dataset_name='abaaba'):
             'max_node': 128,
         }
     elif dataset_name == 'CORA':
+        ds = MyCoraDataset(root='data/Planetoid_2node', name='Cora', transform=NormalizeFeatures(), pre_transform=TruncateData())
         dataset = {
             'num_class': 7,
             'loss_fn': F.cross_entropy,
             'metric': 'acc',
             'metric_mode': 'max',
             'evaluator': ogb.lsc.MAG240MEvaluator(),  # accuracy metric for node classification
-            'train_dataset': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()),
-            'valid_dataset': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()),
-            'test_dataset': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()),
-            'train_mask': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()).data.train_mask,
-            'val_mask': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()).data.val_mask,
-            'test_mask': MyCoraDataset(root='data/Planetoid', name='Cora', transform=NormalizeFeatures()).data.test_mask,
+            'train_dataset': ds,
+            'valid_dataset': ds,
+            'test_dataset': ds,
+            'train_mask': ds.data.train_mask,
+            'val_mask': ds.data.val_mask,
+            'test_mask': ds.data.test_mask,
             'max_node': 2708,
         }
     else:
