@@ -9,7 +9,7 @@ from ogb.lsc.pcqm4m_pyg import PygPCQM4MDataset
 import pyximport
 
 pyximport.install(setup_args={'include_dirs': np.get_include()})
-import algos
+from graphormer import algos
 
 
 def convert_to_single_emb(x, offset=512):
